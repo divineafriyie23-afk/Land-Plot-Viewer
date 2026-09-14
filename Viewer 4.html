@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Land Plot Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #003366; --green: #2e7d32; --green-light: #4caf50;
+      --accent: #00c853; --bg: #f0f4f0; --white: #ffffff;
+      --muted: #B2BEB5; --text: #1a1a2e; --border: #90ee90;
+      --sidebar-w: 380px;
+    }
+    html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100%; overflow: hidden; }
+    .app-shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+    /* NAV */
+    .nav-bar { display: flex; align-items: center; justify-content: space-between; background: var(--navy); height: 56px; padding: 0 14px; flex-shrink: 0; border-bottom: 2px solid var(--accent); }
+    .nav-left { display: flex; align-items: center; gap: 10px; }
+    .logo-placeholder { height: 38px; width: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--green)); display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-weight: 700; color: white; font-size: 14px; flex-shrink: 0; }
+    .nav-title { font-family: 'Space Mono', monospace; color: white; font-size: 13px; font-weight: 700; }
+    .nav-sub { color: var(--muted); font-size: 11px; margin-top: 1px; }
+    .nav-btn { background: white; border: none; padding: 6px 14px; border-radius: 5px; font-weight: 700; font-size: 12px; cursor: pointer; transition: background 0.2s; }
+    .nav-btn:hover { background: var(--accent); color: white; }
+
+    /* TABS */
+    .tab-bar { display: none; background: white; border-bottom: 2px solid var(--border); flex-shrink: 0; }
+    .tab-bar button { flex: 1; padding: 10px 0; border: none; background: none; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; color: #888; cursor: pointer; transition: color 0.2s; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .tab-bar button.active { color: var(--navy); border-bottom-color: var(--accent); }
+
+    /* LAYOUT */
+    .wrapper { display: flex; flex: 1; overflow: hidden; gap: 10px; padding: 10px; min-height: 0; }
+    .sidebar { width: var(--sidebar-w); flex-shrink: 0; background: white; border-radius: 10px; border: 1.5px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 12px; }
+
+    /* SIDEBAR HEADER */
+    .sidebar-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1.5px solid var(--bg); }
+    .sidebar-icon { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--navy), #0055aa); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sidebar-icon svg { width: 18px; height: 18px; fill: white; }
+    .sidebar-title { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--navy); }
+    .sidebar-sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+    /* CRS BADGE */
+    .crs-badge { display: inline-flex; align-items: center; gap: 6px; background: #e8f0fe; border: 1px solid #c5cae9; border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 700; color: #1a237e; font-family: 'Space Mono', monospace; }
+    .crs-dot { width: 8px; height: 8px; border-radius: 50%; background: #3949ab; flex-shrink: 0; }
+
+    .instructions { background: #f8fff8; border: 1px dashed var(--border); border-radius: 8px; padding: 9px 11px; font-size: 12px; color: #555; line-height: 1.8; }
+    .instructions strong { color: var(--navy); font-weight: 600; }
+    .instructions code { background: #e8f5e9; color: var(--green); padding: 1px 5px; border-radius: 3px; font-family: 'Space Mono', monospace; font-size: 11px; }
+
+    label.field-label { font-size: 12px; font-weight: 600; color: var(--navy); display: block; margin-bottom: 5px; }
+
+    /* COORDINATE INPUT TABLE */
+    .coord-table-wrap { border: 1.5px solid #d0e0d0; border-radius: 8px; overflow: hidden; }
+    .coord-table-head { display: grid; grid-template-columns: 30px 1fr 1fr 32px; background: var(--navy); color: white; font-size: 11px; font-weight: 700; font-family: 'Space Mono', monospace; padding: 6px 8px; gap: 4px; letter-spacing: 0.5px; }
+    .coord-rows { max-height: 200px; overflow-y: auto; }
+    .coord-row { display: grid; grid-template-columns: 30px 1fr 1fr 32px; gap: 4px; padding: 4px 8px; align-items: center; border-bottom: 1px solid #e8f5e8; }
+    .coord-row:last-child { border-bottom: none; }
+    .coord-row:nth-child(even) { background: #f8fff8; }
+    .coord-num { font-size: 10px; font-weight: 700; color: #aaa; font-family: 'Space Mono', monospace; text-align: center; }
+    .coord-row input { width: 100%; border: 1px solid #d0e8d0; border-radius: 4px; padding: 5px 6px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--navy); outline: none; }
+    .coord-row input:focus { border-color: var(--accent); }
+    .coord-row input.error { border-color: #e53935; background: #fff8f8; }
+    .btn-del-row { background: #ffebee; border: none; border-radius: 4px; color: #c62828; font-size: 14px; font-weight: 700; cursor: pointer; padding: 3px 7px; line-height: 1; }
+    .btn-del-row:hover { background: #ffcdd2; }
+    .add-row-btn { width: 100%; padding: 7px; background: #f0f4f0; border: none; border-top: 1px solid #d0e0d0; font-size: 12px; font-weight: 600; color: var(--navy); cursor: pointer; transition: background 0.2s; }
+    .add-row-btn:hover { background: #e8f5e8; }
+
+    /* PASTE / IMPORT */
+    .import-row { display: flex; gap: 6px; }
+    .btn-paste { flex: 1; padding: 8px; background: #fff8e1; color: #f57f17; border: 1.5px dashed #ffca28; border-radius: 7px; font-weight: 600; font-size: 12px; cursor: pointer; text-align: center; }
+    .btn-paste:hover { background: #fff3cd; }
+    .btn-upload { flex: 1; padding: 8px; background: #e8f5e9; color: var(--green); border: 1.5px dashed var(--green); border-radius: 7px; font-weight: 600; font-size: 12px; cursor: pointer; text-align: center; }
+    .btn-upload:hover { background: #c8e6c9; }
+    #csvInput { display: none; }
+
+    /* PASTE MODAL */
+    .paste-modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center; }
+    .paste-modal-bg.open { display: flex; }
+    .paste-modal { background: white; border-radius: 12px; padding: 20px; width: 340px; max-width: 95vw; display: flex; flex-direction: column; gap: 10px; }
+    .paste-modal h3 { font-family: 'Space Mono', monospace; font-size: 13px; color: var(--navy); }
+    .paste-modal p { font-size: 12px; color: #666; line-height: 1.6; }
+    .paste-modal textarea { width: 100%; height: 140px; border: 1.5px solid #d0e0d0; border-radius: 8px; padding: 10px; font-family: 'Space Mono', monospace; font-size: 12px; resize: vertical; outline: none; }
+    .paste-modal textarea:focus { border-color: var(--accent); }
+    .paste-modal-btns { display: flex; gap: 8px; }
+    .btn-apply { flex: 1; padding: 9px; background: var(--green); color: white; border: none; border-radius: 7px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    .btn-cancel { padding: 9px 14px; background: #f5f5f5; color: #555; border: none; border-radius: 7px; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+    /* MAP TOGGLE */
+    .map-toggle { display: flex; gap: 6px; }
+    .map-toggle button { flex: 1; padding: 7px; border: 1.5px solid #d0e0d0; border-radius: 6px; background: white; font-size: 12px; font-weight: 600; cursor: pointer; color: #555; transition: all 0.2s; }
+    .map-toggle button.active { background: var(--navy); color: white; border-color: var(--navy); }
+
+    .btn-row { display: flex; gap: 8px; }
+    .btn-primary { flex: 1; padding: 10px; background: var(--green); color: white; border: none; border-radius: 7px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+    .btn-primary:hover { background: var(--green-light); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-secondary { padding: 10px 14px; background: white; color: #666; border: 1.5px solid #ccc; border-radius: 7px; font-weight: 600; font-size: 13px; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+    .btn-secondary:hover { border-color: #e53935; color: #e53935; }
+    .btn-center { width: 100%; padding: 9px; background: #0055aa; color: white; border: none; border-radius: 7px; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+    .btn-center:hover { background: var(--navy); }
+
+    /* PLOT INFO */
+    .plot-info { background: #f8fff8; border: 1.5px solid var(--border); border-radius: 10px; padding: 12px; }
+    .plot-info-title { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; color: var(--navy); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .plot-info-title::before { content: ''; display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .info-grid .full { grid-column: 1 / -1; }
+    .info-item label { display: block; font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+    .info-item input { width: 100%; padding: 7px 9px; border: 1.5px solid #d0e0d0; border-radius: 6px; font-family: 'Space Mono', monospace; font-size: 12px; background: white; color: var(--navy); outline: none; font-weight: 700; }
+    .info-item input:not(:placeholder-shown) { border-color: var(--accent); }
+
+    /* SAVE/LOAD */
+    .saved-section { display: flex; flex-direction: column; gap: 7px; }
+    .save-row { display: flex; gap: 6px; }
+    .save-input { flex: 1; padding: 8px 10px; border: 1.5px solid #d0e0d0; border-radius: 6px; font-size: 12px; outline: none; transition: border-color 0.2s; }
+    .save-input:focus { border-color: var(--accent); }
+    .btn-save { padding: 8px 14px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; }
+    .saved-list { display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; }
+    .saved-item { display: flex; align-items: center; justify-content: space-between; background: #f0f4f0; border-radius: 6px; padding: 6px 9px; font-size: 12px; font-weight: 600; color: var(--navy); border: 1px solid #d0e8d0; }
+    .saved-item-btns { display: flex; gap: 5px; }
+    .saved-item-btns button { padding: 3px 8px; border: none; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .btn-load-plot { background: var(--navy); color: white; }
+    .btn-del-plot { background: #ffebee; color: #c62828; }
+    .no-saved { font-size: 12px; color: #aaa; text-align: center; padding: 8px 0; }
+
+    .btn-pdf { width: 100%; padding: 10px; background: linear-gradient(135deg, #1a237e, #283593); color: white; border: none; border-radius: 7px; font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity 0.2s; }
+    .btn-pdf:hover { opacity: 0.88; }
+
+    #map { flex: 1; border-radius: 10px; border: 2px solid var(--border); overflow: hidden; min-height: 0; min-width: 0; }
+
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1b5e20; color: white; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 9999; white-space: nowrap; }
+    #toast.error { background: #c62828; }
+    #toast.show { opacity: 1; }
+
+    .section-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: -4px; }
+
+    @media (max-width: 700px) {
+      .tab-bar { display: flex; }
+      .wrapper { padding: 8px; gap: 0; overflow: hidden; }
+      .sidebar {
+        width: 100%;
+        border-radius: 10px;
+        flex-shrink: 0;
+        height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #map { border-radius: 10px; min-height: 0; height: 100%; }
+      .wrapper.show-map .sidebar { display: none; }
+      .wrapper.show-sidebar #map { display: none; }
+      .wrapper { flex-direction: column; }
+      body { overflow: hidden; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+<div class="nav-bar">
+  <div class="nav-left">
+    <div class="logo-placeholder">LP</div>
+    <div>
+      <div class="nav-title">Land Plot Viewer</div>
+      <div class="nav-sub">WGS 1984 / UTM Zone 30N</div>
+    </div>
+  </div>
+  <button class="nav-btn">About</button>
+</div>
+
+<div class="tab-bar">
+  <button id="tabSidebar" class="active" onclick="showTab('sidebar')">⚙ Controls</button>
+  <button id="tabMap" onclick="showTab('map')">🗺 Map</button>
+</div>
+
+<div class="wrapper show-sidebar" id="mainWrapper">
+  <div class="sidebar">
+
+    <div class="sidebar-header">
+      <div class="sidebar-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      </div>
+      <div>
+        <div class="sidebar-title">Input Coordinates</div>
+        <div class="sidebar-sub">Northings & Eastings — UTM Zone 30N</div>
+      </div>
+    </div>
+
+    <!-- CRS Badge -->
+    <div class="crs-badge">
+      <div class="crs-dot"></div>
+      CRS: WGS 1984 / UTM Zone 30N (EPSG:32630)
+    </div>
+
+    <div class="instructions">
+      <strong>Enter Northing & Easting</strong> in metres (UTM Zone 30N).<br>
+      <strong>Example:</strong><br>
+      <code>Northing: 619500.00</code><br>
+      <code>Easting: &nbsp;626800.00</code><br>
+      <span style="color:#888; font-size:11px;">Ghana falls within UTM Zone 30N. Values are automatically converted to lat/lng for display.</span>
+    </div>
+
+    <!-- COORDINATE TABLE -->
+    <div>
+      <label class="field-label">Survey Points (Northing / Easting)</label>
+      <div class="coord-table-wrap">
+        <div class="coord-table-head">
+          <span>#</span><span>NORTHING (m)</span><span>EASTING (m)</span><span></span>
+        </div>
+        <div class="coord-rows" id="coordRows"></div>
+        <button class="add-row-btn" onclick="addRow()">＋ Add Point</button>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div>
+      <div class="section-label">Import</div>
+      <div class="import-row" style="margin-top:6px;">
+        <button class="btn-paste" onclick="openPasteModal()">📋 Paste Bulk</button>
+        <label class="btn-upload" for="csvInput">📂 Upload CSV</label>
+        <input type="file" id="csvInput" accept=".csv,.txt">
+      </div>
+    </div>
+
+    <!-- MAP TYPE -->
+    <div>
+      <div class="section-label" style="margin-bottom:6px;">Map Type</div>
+      <div class="map-toggle">
+        <button id="btnStreet" class="active" onclick="setMapType('street')">🗺 Street</button>
+        <button id="btnSatellite" onclick="setMapType('satellite')">🛰 Satellite</button>
+        <button id="btnHybrid" onclick="setMapType('hybrid')">🌍 Hybrid</button>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="drawBtn">▶ Draw Plot</button>
+      <button class="btn-secondary" id="clearBtn">✕ Clear</button>
+    </div>
+    <button class="btn-center" id="centerBtn">⊕ Center View</button>
+
+    <!-- PLOT INFO -->
+    <div class="plot-info">
+      <div class="plot-info-title">Plot Information</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <label>Points</label>
+          <input type="text" id="pointsBox" readonly placeholder="—">
+        </div>
+        <div class="info-item">
+          <label>Area (m²)</label>
+          <input type="text" id="areaBox" readonly placeholder="—">
+        </div>
+        <div class="info-item">
+          <label>Area (Acres)</label>
+          <input type="text" id="acresBox" readonly placeholder="—">
+        </div>
+        <div class="info-item">
+          <label>Area (Hectares)</label>
+          <input type="text" id="hectaresBox" readonly placeholder="—">
+        </div>
+        <div class="info-item full">
+          <label>Perimeter (m)</label>
+          <input type="text" id="perimeterBox" readonly placeholder="—">
+        </div>
+      </div>
+    </div>
+
+    <!-- SAVE/LOAD -->
+    <div class="saved-section">
+      <div class="section-label">Save / Load Plots</div>
+      <div class="save-row">
+        <input class="save-input" id="plotNameInput" type="text" placeholder="Plot name (e.g. Kumasi Farm A)">
+        <button class="btn-save" id="saveBtn">💾 Save</button>
+      </div>
+      <div class="saved-list" id="savedList"></div>
+    </div>
+
+    <button class="btn-pdf" id="pdfBtn">📄 Export PDF Report</button>
+
+  </div>
+
+  <div id="map"></div>
+</div>
+</div>
+
+<!-- PASTE MODAL -->
+<div class="paste-modal-bg" id="pasteModal">
+  <div class="paste-modal">
+    <h3>📋 Paste Bulk Coordinates</h3>
+    <p>Paste Northing,Easting pairs — one per line.<br>
+    Format: <code style="background:#e8f5e9;color:#2e7d32;padding:1px 4px;border-radius:3px;font-size:11px;">619500.00,626800.00</code></p>
+    <textarea id="pasteArea" placeholder="619500.00,626800.00&#10;619520.00,626850.00&#10;619480.00,626900.00&#10;619460.00,626820.00"></textarea>
+    <div class="paste-modal-btns">
+      <button class="btn-apply" onclick="applyPaste()">✓ Apply</button>
+      <button class="btn-cancel" onclick="closePasteModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// ── UTM to LatLng conversion (WGS84 / UTM Zone 30N) ──
+function utmToLatLng(northing, easting) {
+  const k0  = 0.9996;
+  const a   = 6378137.0;
+  const f   = 1 / 298.257223563;
+  const b   = a * (1 - f);
+  const e2  = 1 - (b * b) / (a * a);
+  const ep2 = ((a * a) - (b * b)) / (b * b);
+
+  const x    = easting - 500000.0;
+  const y    = northing;
+  const lng0 = (-3) * Math.PI / 180; // central meridian for zone 30 in radians
+
+  const M  = y / k0;
+  const mu = M / (a * (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256));
+
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+
+  const phi1 = mu
+    + (3*e1/2 - 27*e1*e1*e1/32)         * Math.sin(2*mu)
+    + (21*e1*e1/16 - 55*e1*e1*e1*e1/32) * Math.sin(4*mu)
+    + (151*e1*e1*e1/96)                   * Math.sin(6*mu)
+    + (1097*e1*e1*e1*e1/512)             * Math.sin(8*mu);
+
+  const sinPhi1 = Math.sin(phi1);
+  const cosPhi1 = Math.cos(phi1);
+  const tanPhi1 = Math.tan(phi1);
+
+  const N1 = a / Math.sqrt(1 - e2 * sinPhi1 * sinPhi1);
+  const T1 = tanPhi1 * tanPhi1;
+  const C1 = ep2 * cosPhi1 * cosPhi1;
+  const R1 = a * (1 - e2) / Math.pow(1 - e2 * sinPhi1 * sinPhi1, 1.5);
+  const D  = x / (N1 * k0);
+
+  const lat = phi1 - (N1 * tanPhi1 / R1) * (
+      D*D/2
+    - (5 + 3*T1 + 10*C1 - 4*C1*C1 - 9*ep2)                 * D*D*D*D/24
+    + (61 + 90*T1 + 298*C1 + 45*T1*T1 - 252*ep2 - 3*C1*C1) * D*D*D*D*D*D/720
+  );
+
+  const lng = lng0 + (
+      D
+    - (1 + 2*T1 + C1)                                        * D*D*D/6
+    + (5 - 2*C1 + 28*T1 - 3*C1*C1 + 8*ep2 + 24*T1*T1)      * D*D*D*D*D/120
+  ) / cosPhi1;
+
+  return { lat: lat * 180 / Math.PI, lng: lng * 180 / Math.PI };
+}
+
+// ── MAP SETUP ──
+const DEFAULT_CENTER = [6.6885, -1.6244]; // Kumasi
+const DEFAULT_ZOOM = 13;
+
+const map = L.map('map', { zoomControl: true }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+
+const tileLayers = {
+  street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' }),
+  hybrid: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '© Esri' })
+};
+const labelLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, opacity: 0.35 });
+tileLayers.street.addTo(map);
+let currentTileType = 'street';
+
+function setMapType(type) {
+  map.removeLayer(tileLayers[currentTileType]);
+  if (currentTileType === 'hybrid') map.removeLayer(labelLayer);
+  tileLayers[type].addTo(map);
+  if (type === 'hybrid') labelLayer.addTo(map);
+  currentTileType = type;
+  document.querySelectorAll('.map-toggle button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn' + type.charAt(0).toUpperCase() + type.slice(1)).classList.add('active');
+}
+
+// ── MOBILE TAB ──
+function showTab(tab) {
+  const w = document.getElementById('mainWrapper');
+  w.classList.remove('show-sidebar', 'show-map');
+  w.classList.add(tab === 'map' ? 'show-map' : 'show-sidebar');
+  document.getElementById('tabSidebar').classList.toggle('active', tab === 'sidebar');
+  document.getElementById('tabMap').classList.toggle('active', tab === 'map');
+  if (tab === 'map') setTimeout(() => map.invalidateSize(), 100);
+}
+
+// ── ROW MANAGEMENT ──
+let rowCount = 0;
+
+function addRow(northing = '', easting = '') {
+  rowCount++;
+  const n = rowCount;
+  const div = document.createElement('div');
+  div.className = 'coord-row';
+  div.id = `row-${n}`;
+  div.innerHTML = `
+    <span class="coord-num">${n}</span>
+    <input type="number" step="0.01" placeholder="619500.00" value="${northing}" class="northing-input" data-row="${n}">
+    <input type="number" step="0.01" placeholder="626800.00" value="${easting}" class="easting-input" data-row="${n}">
+    <button class="btn-del-row" onclick="delRow(${n})">×</button>
+  `;
+  document.getElementById('coordRows').appendChild(div);
+}
+
+function delRow(n) {
+  const el = document.getElementById(`row-${n}`);
+  if (el) el.remove();
+  renumberRows();
+}
+
+function renumberRows() {
+  const rows = document.querySelectorAll('.coord-row');
+  rows.forEach((r, i) => { r.querySelector('.coord-num').textContent = i + 1; });
+}
+
+function getRows() {
+  const rows = document.querySelectorAll('.coord-row');
+  const points = [];
+  let valid = true;
+  rows.forEach(r => {
+    const nEl = r.querySelector('.northing-input');
+    const eEl = r.querySelector('.easting-input');
+    const n = parseFloat(nEl.value);
+    const e = parseFloat(eEl.value);
+    nEl.classList.remove('error');
+    eEl.classList.remove('error');
+    if (isNaN(n) || isNaN(e)) {
+      if (isNaN(n)) nEl.classList.add('error');
+      if (isNaN(e)) eEl.classList.add('error');
+      valid = false;
+    } else {
+      points.push({ northing: n, easting: e });
+    }
+  });
+  return valid ? points : null;
+}
+
+// Init with 4 empty rows
+addRow(); addRow(); addRow(); addRow();
+
+// ── PASTE MODAL ──
+function openPasteModal() { document.getElementById('pasteModal').classList.add('open'); }
+function closePasteModal() { document.getElementById('pasteModal').classList.remove('open'); }
+
+function applyPaste() {
+  const raw = document.getElementById('pasteArea').value.trim();
+  if (!raw) return;
+  const lines = raw.split('\n').filter(l => l.trim());
+  const parsed = [];
+  for (const line of lines) {
+    const parts = line.split(/[,\t\s]+/).map(s => parseFloat(s.trim()));
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      parsed.push({ northing: parts[0], easting: parts[1] });
+    }
+  }
+  if (parsed.length < 3) { showToast('Need at least 3 valid N,E pairs.', true); return; }
+  document.getElementById('coordRows').innerHTML = '';
+  rowCount = 0;
+  parsed.forEach(p => addRow(p.northing, p.easting));
+  document.getElementById('pasteArea').value = '';
+  closePasteModal();
+  showToast(`${parsed.length} points imported!`);
+}
+
+// ── CSV IMPORT ──
+document.getElementById('csvInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const lines = ev.target.result.split('\n').filter(l => l.trim());
+    const parsed = [];
+    for (const line of lines) {
+      const parts = line.replace(/['"]/g, '').split(/[,\t]+/).map(s => parseFloat(s.trim()));
+      if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        parsed.push({ northing: parts[0], easting: parts[1] });
+      }
+    }
+    if (parsed.length < 3) { showToast('Could not find valid N,E pairs in file.', true); return; }
+    document.getElementById('coordRows').innerHTML = '';
+    rowCount = 0;
+    parsed.forEach(p => addRow(p.northing, p.easting));
+    showToast(`${parsed.length} points imported from file!`);
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+// ── TOAST ──
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isError ? 'error show' : 'show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── STATE ──
+let currentPolygon = null;
+let currentMarkers = [];
+let lastPoints = [];
+
+// ── GEODESIC AREA ──
+function geodesicArea(latLngs) {
+  const R = 6378137, rad = Math.PI / 180;
+  let area = 0;
+  const n = latLngs.length;
+  for (let i = 0; i < n; i++) {
+    const p1 = latLngs[i], p2 = latLngs[(i + 1) % n];
+    area += (p2.lng - p1.lng) * rad * (2 + Math.sin(p1.lat * rad) + Math.sin(p2.lat * rad));
+  }
+  return Math.abs(area * R * R / 2);
+}
+
+// ── DRAW ──
+function drawPlot() {
+  const points = getRows();
+  if (!points) { showToast('Fix highlighted fields first.', true); return; }
+  if (points.length < 3) { showToast('Need at least 3 points to draw a polygon.', true); return; }
+
+  const latLngs = points.map(p => {
+    const ll = utmToLatLng(p.northing, p.easting);
+    return L.latLng(ll.lat, ll.lng);
+  });
+
+  if (currentPolygon) map.removeLayer(currentPolygon);
+  currentMarkers.forEach(m => map.removeLayer(m));
+  currentMarkers = [];
+
+  currentPolygon = L.polygon(latLngs, {
+    color: '#003366', fillColor: '#00c853', fillOpacity: 0.25, weight: 2.5
+  }).addTo(map);
+  map.fitBounds(currentPolygon.getBounds(), { padding: [30, 30] });
+  lastPoints = points;
+
+  // Numbered corner markers
+  latLngs.forEach((ll, i) => {
+    const num = i + 1;
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="
+        width:26px; height:26px; border-radius:50%;
+        background:#003366; border:2.5px solid #00c853;
+        color:white; font-family:'Space Mono',monospace;
+        font-size:10px; font-weight:700;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 2px 6px rgba(0,0,0,0.35);
+        cursor:default;
+      ">${num}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+    const marker = L.marker(ll, { icon, interactive: false }).addTo(map);
+    currentMarkers.push(marker);
+  });
+
+  const area = geodesicArea(latLngs);
+  let perimeter = 0;
+  for (let i = 0; i < latLngs.length; i++)
+    perimeter += latLngs[i].distanceTo(latLngs[(i + 1) % latLngs.length]);
+
+  document.getElementById('pointsBox').value = latLngs.length;
+  document.getElementById('areaBox').value = area.toFixed(2);
+  document.getElementById('acresBox').value = (area / 4046.856).toFixed(4);
+  document.getElementById('hectaresBox').value = (area / 10000).toFixed(4);
+  document.getElementById('perimeterBox').value = perimeter.toFixed(2);
+
+  showToast('Plot drawn successfully!');
+  if (window.innerWidth <= 700) showTab('map');
+}
+
+// ── CLEAR ──
+function clearPlot() {
+  if (currentPolygon) { map.removeLayer(currentPolygon); currentPolygon = null; }
+  currentMarkers.forEach(m => map.removeLayer(m));
+  currentMarkers = [];
+  lastPoints = [];
+  document.getElementById('coordRows').innerHTML = '';
+  rowCount = 0;
+  addRow(); addRow(); addRow(); addRow();
+  ['pointsBox','areaBox','acresBox','hectaresBox','perimeterBox'].forEach(id => document.getElementById(id).value = '');
+}
+
+// ── CENTER ──
+function centerMap() { map.setView(DEFAULT_CENTER, DEFAULT_ZOOM); }
+
+// ── SAVE / LOAD ──
+function getSaved() { try { return JSON.parse(localStorage.getItem('lpv_plots') || '{}'); } catch { return {}; } }
+function setSaved(data) { localStorage.setItem('lpv_plots', JSON.stringify(data)); }
+
+function renderSavedList() {
+  const list = document.getElementById('savedList');
+  const data = getSaved();
+  const keys = Object.keys(data);
+  if (keys.length === 0) { list.innerHTML = '<div class="no-saved">No saved plots yet.</div>'; return; }
+  list.innerHTML = keys.map(k => `
+    <div class="saved-item">
+      <span>📍 ${k}</span>
+      <div class="saved-item-btns">
+        <button class="btn-load-plot" onclick="loadPlot('${k}')">Load</button>
+        <button class="btn-del-plot" onclick="deletePlot('${k}')">Del</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const name = document.getElementById('plotNameInput').value.trim();
+  if (!name) { showToast('Enter a name for the plot.', true); return; }
+  const points = getRows();
+  if (!points || points.length < 3) { showToast('Draw a valid plot first.', true); return; }
+  const data = getSaved();
+  data[name] = {
+    points,
+    info: {
+      points: document.getElementById('pointsBox').value,
+      area: document.getElementById('areaBox').value,
+      acres: document.getElementById('acresBox').value,
+      hectares: document.getElementById('hectaresBox').value,
+      perimeter: document.getElementById('perimeterBox').value
+    }
+  };
+  setSaved(data);
+  renderSavedList();
+  document.getElementById('plotNameInput').value = '';
+  showToast(`"${name}" saved!`);
+});
+
+function loadPlot(name) {
+  const data = getSaved();
+  if (!data[name]) return;
+  document.getElementById('coordRows').innerHTML = '';
+  rowCount = 0;
+  data[name].points.forEach(p => addRow(p.northing, p.easting));
+  const info = data[name].info;
+  document.getElementById('pointsBox').value = info.points || '';
+  document.getElementById('areaBox').value = info.area || '';
+  document.getElementById('acresBox').value = info.acres || '';
+  document.getElementById('hectaresBox').value = info.hectares || '';
+  document.getElementById('perimeterBox').value = info.perimeter || '';
+  drawPlot();
+  showToast(`"${name}" loaded!`);
+}
+
+function deletePlot(name) {
+  const data = getSaved();
+  delete data[name];
+  setSaved(data);
+  renderSavedList();
+  showToast(`"${name}" deleted.`);
+}
+renderSavedList();
+
+// ── PDF EXPORT ──
+document.getElementById('pdfBtn').addEventListener('click', async () => {
+  const pts = document.getElementById('pointsBox').value;
+  const area = document.getElementById('areaBox').value;
+  const acres = document.getElementById('acresBox').value;
+  const hectares = document.getElementById('hectaresBox').value;
+  const perimeter = document.getElementById('perimeterBox').value;
+
+  if (!pts) { showToast('Draw a plot first before exporting.', true); return; }
+  showToast('Generating PDF...');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pw = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(0, 51, 102);
+  doc.rect(0, 0, pw, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('LAND PLOT VIEWER', 14, 13);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  doc.text('CRS: WGS 1984 / UTM Zone 30N (EPSG:32630)   |   Generated: ' + new Date().toLocaleString(), 14, 22);
+
+  doc.setFillColor(0, 200, 83);
+  doc.rect(0, 28, pw, 2, 'F');
+
+  doc.setTextColor(0, 51, 102);
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+  doc.text('PLOT METRICS', 14, 40);
+  doc.setDrawColor(200, 230, 200); doc.setLineWidth(0.4);
+  doc.line(14, 42, pw - 14, 42);
+
+  const metrics = [
+    ['Number of Points', pts],
+    ['Area (m²)', area],
+    ['Area (Acres)', acres],
+    ['Area (Hectares)', hectares],
+    ['Perimeter (m)', perimeter],
+  ];
+
+  doc.setFontSize(10);
+  let y = 50;
+  metrics.forEach(([label, val], i) => {
+    doc.setFillColor(i % 2 === 0 ? 248 : 255, 255, i % 2 === 0 ? 248 : 255);
+    doc.rect(14, y - 5, pw - 28, 10, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    doc.text(label, 18, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 51, 102);
+    doc.text(val || 'N/A', pw - 18, y, { align: 'right' });
+    y += 12;
+  });
+
+  y += 6;
+  doc.setTextColor(0, 51, 102); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+  doc.text('SURVEY POINTS — NORTHING / EASTING (UTM Zone 30N)', 14, y);
+  y += 4;
+  doc.setDrawColor(200, 230, 200);
+  doc.line(14, y, pw - 14, y);
+  y += 2;
+
+  // Table header
+  doc.setFillColor(0, 51, 102);
+  doc.rect(14, y, pw - 28, 8, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text('PT', 18, y + 5.5);
+  doc.text('NORTHING (m)', 32, y + 5.5);
+  doc.text('EASTING (m)', pw - 18, y + 5.5, { align: 'right' });
+  y += 10;
+
+  doc.setFont('courier', 'normal'); doc.setFontSize(9);
+  lastPoints.forEach((p, i) => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFillColor(i % 2 === 0 ? 245 : 255, 255, i % 2 === 0 ? 248 : 255);
+    doc.rect(14, y - 4, pw - 28, 8, 'F');
+    doc.setTextColor(30, 30, 30);
+    doc.text(String(i + 1).padStart(3, '0'), 18, y);
+    doc.text(p.northing.toFixed(2), 32, y);
+    doc.text(p.easting.toFixed(2), pw - 18, y, { align: 'right' });
+    y += 9;
+  });
+
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(0, 51, 102);
+    doc.rect(0, 285, pw, 12, 'F');
+    doc.setTextColor(180, 190, 181); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text('Land Plot Viewer  |  WGS 1984 / UTM Zone 30N', 14, 293);
+    doc.text(`Page ${i} of ${pages}`, pw - 14, 293, { align: 'right' });
+  }
+
+  doc.save('land_plot_report.pdf');
+  showToast('PDF exported!');
+});
+
+document.getElementById('drawBtn').addEventListener('click', drawPlot);
+document.getElementById('clearBtn').addEventListener('click', clearPlot);
+document.getElementById('centerBtn').addEventListener('click', centerMap);
+</script>
+</body>
+</html>
