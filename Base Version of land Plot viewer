@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>Land Plot Viewer</title>
+<style>.nav-bar{display:flex; font-direction:row; border:none; justify-content:space-between; height:65px; border-width:1px; border-color:black;background-color: #003366; margin-left:0; margin-right:0; border-radius:5px;}
+.lo{display:inline-block; height:58px;} .logo{height:58px; border-radius:58px; padding-top:2px;} .tx{display:inline-block;} .Ld{display:block; margin-bottom:10px; color:White; font-weight:bold;} .vi{color: #B2BEB5; }
+.bs{height:58px;} .bt{height:30px; margin-top:15px; margin-right:4px; width:80px; border-radius:5px;}.bt{background-color:white; border:none;} .ou{font-weight:bold; font-size:15px;}
+.sidebar{display:inline-block; width:410px; background-color:rgba(178, 190, 181, 0.6); height:1080px; border-radius:5px; margin-top:8px;} .su{display:inline-block; width:20px;} .pu{display:inline-block;width:40px; margin-left:55px;} .s1{height:56px;font-direction:row;} .llg{height:55px;display:inline-block; margin-top75px;} .pc{font-size:17px;}
+.egg{margin-bottom:50px;} .c1{display:block;} .c2{display:block;}.c3{display:block;} .cb{ display:flex; background-color:white; width:400px; height:400px; margin-left:5px; margin-top:6px; border-radius:4px; border:solid; border-color:green;} .trr{margin-left:4px;} .bt2{display:flex; justify-content:space-between; margin-top:20px;}
+.b1{padding-top:7px; padding-bottom:7px; border:none; margin-left:6px; border-radius:4px;color:white;background-color:green; cursor:pointer;} .b2{border-radius:4px; border-color:grey; margin-right:4px; cursor:pointer;} .cords{padding-right:500px;} .ccv{display:flex;} .cv{width:90%; margin-top:20px; margin-left:16px;padding-top:9px; padding-bottom:9px; border-radius:4px;background-color:#007bff; border:none; color:white; font-weight:bold; cursor:pointer;}
+.pi{display:flex;background-color:white; margin-top:20px; width:90%; margin-left:14px;padding-left:7px; height:300px; border-radius:7px;} .pf{ margin-top:0; color:blue; margin-left:95px;} .container{ display:inline-block; display:flex; background-color:white;  height:1080px; margin-left:11px; margin-right:11px; margin-top:9px; border-radius:4px; border:solid; border:2px solid #90ee90;} .sidebar,.container{display:inline-block; vertical-align:top;}.container{width:250px; margin-right;500px;flex:1;}
+.wrapper{display:flex; height:80vh;} .pd{display:flex; background-color:white;width:300px;justify-content:center;margin-left:28px; border:solid; border-radius:5px;} .po{display:block margin-bottom:500px;} #pn{margin-top:60px; margin-left:-90px;}.ar{margin-top:100px; margin-right:60px;} #areaBox{margin-left:60px; margin-top:-40px; display:inline-block;}</style>
+</head>
+<body>
+<div class="nav-bar">
+    <div class="left-sec">
+        <div class="lo"><img class="logo" src="llg.png"></div>
+        <div class="tx">
+            <span class="Ld" >Land Plot Viewer</span>
+            <span class="vi" >Visualize land boundaries from coordinates</span>
+        </div>
+    </div>
+    <div class="right-sec">
+        <div class="bs"><button class="bt"><span class="ou">About</span></button></div>
+    </div>
+</div>
+<div class="wrapper">
+    <div class="sidebar">
+    <div class="s1">
+        <div class="su"><img class="llg" src="Sg.png"></div>
+        <div class="pu"><h3 class="pc">Input_Coordinates</h3></div>
+    </div>
+<div class="trr">
+    <p><spam class="egg">Enter latitude and longitude (lat,lng) per line.</spam></p>
+<p>Example:</p>
+<spam class="c1">5.6037,-0.1870</spam>
+<spam class="c2">5.6040,-0.1865</spam>
+<spam class="c3">5.6045,-0.1872</spam>
+<spam class="c4">5.6032,-0.1880</spam>
+</div>
+<div class="cb"><textarea id="cords" rows="6" placeholder="Enter lat,lng per line in"></textarea>
+
+</div>
+<div class="bt2">
+    <button id="drawBtn" class="b1">Draw Land Plot</button>
+    <button id="clearBtn" class="b2">Clear Plot</button>
+</div>
+<div class="ccv"><button class="cv" id="centerBtn">Center View</button></div>
+
+<!-- Empty Plot Information Panel -->
+<div id="plotInfo" class="pi">
+    <div class="pd"><p class="pp">PLOT INFORMATION</p>
+    <div id="pn"><p><label>Points:</label><input type="text" id="pointsBox" readonly placeholder="Number of Points"></p>
+    <label class="ar">Area:</label> <input type="text" id="areaBox" readonly placeholder="Area">
+    <p><label>Perimeter(m):</label> <input type="text" id="perimeterBox" readonly placeholder="Perimeter"></p></div>
+
+    </div>
+
+</div>
+</div>
+
+<div id="map" class="container" ></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-geometryutil@0.9.3/dist/leaflet.geometryutil.min.js"></script>
+<script>
+   const map = L.map('map').setView([5.6037, -0.1870], 13);
+
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+   function drawPlot() {
+     const input = document.getElementById('cords').value.trim();
+     if(!input) return;
+
+     const lines = input.split('\n');
+     const points = lines.map(line => {
+     const [lat, lng] = line.split(',').map(Number);
+     return [lat, lng];
+     });
+
+     const polygon = L.polygon(points, {color: 'blue' }).addTo(map);
+     map.fitBounds(polygon.getBounds());
+
+     // Area
+   let area =0;
+   if (L.GeometryUtil && polygon.getLatLngs()[0].length > 2) {
+     area = L.GeometryUtil.geodesicArea(polygon.getLatLngs()[0]);
+     }
+
+    // perimeter
+    let perimeter = 0;
+    const latlngs = polygon.getLatLngs()[0];
+    for (let i = 0; i < latlngs.length; i++) {
+    const p1 = latlngs[i];
+    const p2 = latlngs[(i + 1) % latlngs.length]; // wrap to first point
+    perimeter += p1.distanceTo(p2);
+    }
+
+   //Link results to text boxes
+   document.getElementById('pointsBox').value = points.length;
+   document.getElementById('areaBox').value = (area !== null && area !== undefined) ? area.toFixed(2) : "N/A";
+   document.getElementById('perimeterBox').value = perimeter.toFixed(2);
+   }
+
+
+   // Clear polygon
+   function clearPlot() {
+   map.eachLayer(layer => {
+   if (layer instanceof L.Polygon) {
+   map.removeLayer(layer);
+   }
+   });
+
+   // Reset the text boxes
+   document.getElementById('pointsBox').value = "";
+   document.getElementById('areaBox').value = "";
+   document.getElementById('perimeterBox').value = "";
+   }
+
+   // Center View function
+   function centerMap() {
+   const centerCoords = [5.6037, -0.1870];
+   const zoomLevel = 13;
+   map.setView(centerCoords, zoomLevel);
+   }
+
+   //Link buttons to functions
+   document.getElementById('drawBtn').addEventListener('click', drawPlot);
+   document.getElementById('clearBtn').addEventListener('click', clearPlot);
+   document.getElementById('centerBtn').addEventListener('click', centerMap);
+
+</script>
+
+
+</body>
+</html>
